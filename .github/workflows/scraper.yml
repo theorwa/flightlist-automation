@@ -1,0 +1,30 @@
+name: Scrape FlightList Every 30 Minutes
+
+on:
+  schedule:
+    - cron: '*/1 * * * *'  # كل 30 دقيقة
+  workflow_dispatch:        # تقدر تشغله يدوي كمان
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install
+
+      - name: Run scraper
+        run: python flightlist_poc.py
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
