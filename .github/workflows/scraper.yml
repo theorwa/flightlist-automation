@@ -1,9 +1,9 @@
-name: Scrape FlightList Every 30 Minutes
+name: Scrape FlightList Every 5 Minutes
 
 on:
   schedule:
-    - cron: '*/1 * * * *'  # كل 30 دقيقة
-  workflow_dispatch:        # تقدر تشغله يدوي كمان
+    - cron: '*/5 * * * *'  # كل 5 دقائق
+  workflow_dispatch:        # تشغيل يدوي
 
 jobs:
   run:
