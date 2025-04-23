@@ -24,7 +24,7 @@ jobs:
           python -m playwright install
 
       - name: Run scraper
-        run: python flightlist_poc.py
+        run: python flightlist_github.py
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
