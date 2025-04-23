@@ -1,20 +1,33 @@
 # flightlist_scraper.py
-# Configurable and optimized FlightList.io scraper with Telegram alerts
+# Multi-filter configurable FlightList.io scraper with Telegram alerts
 
 import asyncio
 import os
 import httpx
 from playwright.async_api import async_playwright
 
-# ========== Configuration (EDIT THESE) ==========
-CONFIG = {
-    "origin": "Bucharest",
-    "depart_day": "10",
-    "return_day": "12",
-    "currency": "USD",
-    "max_results": "25",
-    "max_budget": "27",
-}
+# ========== Filters Configuration ==========
+FILTERS = [
+    {
+        "name": "Bucharest Budget 27$",
+        "origin": "Bucharest",
+        "depart_day": "10",
+        "return_day": "12",
+        "currency": "USD",
+        "max_results": "25",
+        "max_budget": "27",
+    },
+    {
+        "name": "Sofia Budget 40$",
+        "origin": "Sofia",
+        "depart_day": "15",
+        "return_day": "17",
+        "currency": "USD",
+        "max_results": "25",
+        "max_budget": "40",
+    }
+    # أضف المزيد هنا 👆
+]
 
 # ========== Telegram Messaging ==========
 async def send_telegram_message(message: str):
@@ -33,7 +46,54 @@ async def send_telegram_message(message: str):
     async with httpx.AsyncClient() as client:
         await client.post(url, json=payload)
 
-# ========== Scraper ==========
+# ========== Scraping Function ==========
+async def scrape_flights(page, config):
+    print(f"\n[INFO] Running filter: {config['name']}")
+    await page.goto("https://www.flightlist.io", wait_until="networkidle")
+
+    await page.locator('#from-input').click()
+    await page.keyboard.type(config['origin'], delay=50)
+    await page.wait_for_selector(".easy-autocomplete-container .eac-item", timeout=3000)
+    await page.locator(".easy-autocomplete-container .eac-item").first.click()
+
+    await page.locator('#deprange').click()
+    await page.wait_for_selector('.daterangepicker', timeout=3000)
+    await page.locator(f'td:has-text("{config["depart_day"]}")').nth(1).click()
+    await page.locator(f'td:has-text("{config["return_day"]}")').nth(1).click()
+    await page.locator('.applyBtn:enabled').click()
+
+    await page.select_option('#currency', config['currency'])
+    await page.locator('button:has-text("Additional Options")').click()
+    await page.wait_for_selector('#limit', timeout=2000)
+    await page.select_option('#limit', config['max_results'])
+    await page.fill('#budget', config['max_budget'])
+
+    await page.locator('#submit').click()
+    await page.wait_for_timeout(2000)
+
+    await page.wait_for_selector(".flights-list .flight", timeout=20000)
+    flight_cards = page.locator(".flights-list .flight")
+    count = await flight_cards.count()
+    results = []
+
+    for i in range(count):
+        flight = flight_cards.nth(i)
+        price = await flight.locator(".price").inner_text()
+        date = await flight.locator("div.col-md-3 small.text-muted").inner_text()
+        route = await flight.locator(".col-md-5 small.text-muted").inner_text()
+        times = await flight.locator(".col-md-3 span.reduced").inner_text()
+        results.append(
+            f"<b>{date}</b>\n🕒 {times.strip()}\n✈️ {route.strip()}\n💰 Price: <b>${price}</b>\n---"
+        )
+
+    if results:
+        header = f"🧭 <b>{config['name']}</b>\n\n"
+        await send_telegram_message(header + "\n\n".join(results))
+        print(f"[SUCCESS] Sent {len(results)} results to Telegram.")
+    else:
+        print("[INFO] No results found for this filter.")
+
+# ========== Runner ==========
 async def run():
     print("[INFO] Launching browser...")
     async with async_playwright() as p:
@@ -42,56 +102,11 @@ async def run():
         page = await context.new_page()
         await page.set_viewport_size({"width": 1920, "height": 1080})
 
-        print("[INFO] Opening FlightList.io...")
-        await page.goto("https://www.flightlist.io", wait_until="networkidle")
-
-        print(f"[INFO] Typing origin: {CONFIG['origin']} and selecting from autocomplete")
-        await page.locator('#from-input').click()
-        await page.keyboard.type(CONFIG['origin'], delay=50)
-        await page.wait_for_selector(".easy-autocomplete-container .eac-item", timeout=3000)
-        await page.locator(".easy-autocomplete-container .eac-item").first.click()
-
-        print("[INFO] Selecting departure date range...")
-        await page.locator('#deprange').click()
-        await page.wait_for_selector('.daterangepicker', timeout=3000)
-        await page.locator(f'td:has-text("{CONFIG["depart_day"]}")').nth(1).click()
-        await page.locator(f'td:has-text("{CONFIG["return_day"]}")').nth(1).click()
-        await page.locator('.applyBtn:enabled').click()
-
-        print("[INFO] Setting currency, filters, and budget...")
-        await page.select_option('#currency', CONFIG['currency'])
-        await page.locator('button:has-text("Additional Options")').click()
-        await page.wait_for_selector('#limit', timeout=2000)
-        await page.select_option('#limit', CONFIG['max_results'])
-        await page.fill('#budget', CONFIG['max_budget'])
-
-        print("[INFO] Clicking the Search button")
-        await page.locator('#submit').click()
-        await page.wait_for_timeout(2000)
-
-        print("[INFO] Waiting for results to load...")
-        await page.wait_for_selector(".flights-list .flight", timeout=20000)
-
-        print("[INFO] Extracting flight deals...")
-        flight_cards = page.locator(".flights-list .flight")
-        count = await flight_cards.count()
-        results = []
-
-        for i in range(count):
-            flight = flight_cards.nth(i)
-            price = await flight.locator(".price").inner_text()
-            date = await flight.locator("div.col-md-3 small.text-muted").inner_text()
-            route = await flight.locator(".col-md-5 small.text-muted").inner_text()
-            times = await flight.locator(".col-md-3 span.reduced").inner_text()
-            results.append(f"<b>{date}</b>\n\U0001F552 {times.strip()}\n\u2708\ufe0f {route.strip()}\n\U0001F4B0 Price: <b>${price}</b>\n---")
-
-        if results:
-            content = "\n\n".join(results)
-            print("[INFO] Sending to Telegram...")
-            await send_telegram_message(content)
-            print("[SUCCESS] Message sent to Telegram.")
-        else:
-            print("[INFO] No flights found. Nothing to send.")
+        for config in FILTERS:
+            try:
+                await scrape_flights(page, config)
+            except Exception as e:
+                print(f"[ERROR] Failed on filter {config['name']}: {e}")
 
         await browser.close()
 
