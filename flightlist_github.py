@@ -67,6 +67,7 @@ async def run():
 
         print("[INFO] Clicking the Search button")
         await page.locator('#submit').click()
+        await page.wait_for_timeout(2000)
 
         print("[INFO] Waiting for results to load...")
         await page.wait_for_selector(".flights-list .flight", timeout=20000)
