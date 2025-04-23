@@ -1,9 +1,8 @@
 # flightlist_poc.py
-# Scrapes FlightList.io and sends results to Telegram (via GitHub Actions)
+# Extracts cheapest flights from FlightList.io and sends to Telegram (final version)
 
 import asyncio
 import json
-import os
 import httpx
 from playwright.async_api import async_playwright
 
@@ -28,7 +27,7 @@ async def send_telegram_message(message):
 async def run():
     print("[INFO] Launching browser...")
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(headless=False)
         context = await browser.new_context()
         page = await context.new_page()
         await page.set_viewport_size({"width": 1920, "height": 1080})
@@ -37,16 +36,23 @@ async def run():
         await page.goto("https://www.flightlist.io", wait_until="networkidle")
 
         print("[INFO] Typing origin: Bucharest and selecting from autocomplete")
-        await page.locator('#from-input').click()
+        origin_input = page.locator('#from-input')
+        await origin_input.wait_for(timeout=10000)
+        await origin_input.click()
         await page.keyboard.type("Bucharest", delay=100)
-        await page.wait_for_timeout(1500)
+        await page.wait_for_timeout(1000)
 
-        for _ in range(10):
+        for i in range(10):
             items = await page.locator(".easy-autocomplete-container .eac-item").all()
             if items:
                 await items[0].click()
+                print("[SUCCESS] Selected: Bucharest from autocomplete")
                 break
-            await page.wait_for_timeout(500)
+            else:
+                print(f"[WAIT] Autocomplete not ready yet... retry {i + 1}")
+                await page.wait_for_timeout(500)
+        else:
+            raise Exception("Autocomplete list did not appear after multiple attempts")
 
         print("[INFO] Selecting departure date range: May 10 - May 12")
         await page.locator('#deprange').click()
@@ -54,38 +60,49 @@ async def run():
         await page.locator('td:has-text("10")').nth(1).click()
         await page.locator('td:has-text("12")').nth(1).click()
         await page.locator('.applyBtn:enabled').click()
+        await page.wait_for_timeout(1000)
 
         print("[INFO] Selecting currency: USD")
         await page.select_option('#currency', 'USD')
 
         print("[INFO] Expanding additional options")
         await page.locator('button:has-text("Additional Options")').click()
+        await page.wait_for_timeout(1000)
 
-        print("[INFO] Setting max results and budget")
+        print("[INFO] Setting max number of results to 25")
         await page.select_option('#limit', '25')
+
+        print("[INFO] Setting maximum budget to 27 USD")
         await page.fill('#budget', '27')
+        await page.wait_for_timeout(500)
 
         print("[INFO] Clicking the Search button")
         await page.locator('#submit').click()
+        await page.wait_for_timeout(5000)
+
+        print("[INFO] Waiting for results to load...")
         await page.wait_for_selector(".flights-list .flight", timeout=30000)
 
-        print("[INFO] Extracting results...")
-        flights = page.locator(".flights-list .flight")
-        count = await flights.count()
+        print("[INFO] Extracting flight deals...")
+        flight_cards = page.locator(".flights-list .flight")
+        count = await flight_cards.count()
         results = []
 
-        for i in range(min(3, count)):
-            f = flights.nth(i)
-            price = await f.locator(".price").inner_text()
-            date = await f.locator("div.col-md-3 small.text-muted").inner_text()
-            route = await f.locator(".col-md-5 small.text-muted").inner_text()
-            times = await f.locator(".col-md-3 span.reduced").inner_text()
+        for i in range(count):
+            flight = flight_cards.nth(i)
+            price = await flight.locator(".price").inner_text()
+            date = await flight.locator("div.col-md-3 small.text-muted").inner_text()
+            route = await flight.locator(".col-md-5 small.text-muted").inner_text()
+            times = await flight.locator(".col-md-3 span.reduced").inner_text()
             results.append(f"<b>{date}</b>\n🕒 {times.strip()}\n✈️ {route.strip()}\n💰 Price: <b>${price}</b>\n---")
 
-        content = "\n\n".join(results) or "No flights found."
-        print("[INFO] Sending to Telegram...")
-        await send_telegram_message(content)
-        print("[SUCCESS] Message sent to Telegram.")
+        if results:
+            content = "\n\n".join(results)
+            print("[INFO] Sending to Telegram...")
+            await send_telegram_message(content)
+            print("[SUCCESS] Message sent to Telegram.")
+        else:
+            print("[INFO] No flights found. Nothing to send.")
 
         await browser.close()
 
