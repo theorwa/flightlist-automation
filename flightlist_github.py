@@ -9,7 +9,7 @@ from playwright.async_api import async_playwright
 # ========== Filters Configuration ==========
 FILTERS = [
     {
-        "name": "بوخارست بين 10 و 12 مايو ≥ 25$ ",
+        "name": "بوخارست بين 10 و 12 مايو ≤ 25$ ",
         "origin": "Bucharest",
         "depart_day": "10",
         "return_day": "12",
