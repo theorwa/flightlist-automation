@@ -9,22 +9,22 @@ from playwright.async_api import async_playwright
 # ========== Filters Configuration ==========
 FILTERS = [
     {
-        "name": "Bucharest Budget 27$",
+        "name": "بوخارست بين 10 و 12 مايو",
         "origin": "Bucharest",
         "depart_day": "10",
         "return_day": "12",
         "currency": "USD",
         "max_results": "25",
-        "max_budget": "27",
+        "max_budget": "25",
     },
     {
-        "name": "Sofia Budget 40$",
+        "name": "صوفيا بين 15 و 17 مايو",
         "origin": "Sofia",
         "depart_day": "15",
         "return_day": "17",
         "currency": "USD",
         "max_results": "25",
-        "max_budget": "40",
+        "max_budget": "25",
     }
     # أضف المزيد هنا 👆
 ]
