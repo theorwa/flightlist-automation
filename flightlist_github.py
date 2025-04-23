@@ -1,8 +1,7 @@
 # flightlist_poc.py
-# Extracts cheapest flights from FlightList.io and sends to Telegram (final version)
+# Fast and optimized version - Scrapes FlightList.io and sends to Telegram
 
 import asyncio
-import json
 import os
 import httpx
 from playwright.async_api import async_playwright
@@ -24,7 +23,7 @@ async def send_telegram_message(message):
     async with httpx.AsyncClient() as client:
         await client.post(url, json=payload)
 
-# Main scraping function
+# Main function
 async def run():
     print("[INFO] Launching browser...")
     async with async_playwright() as p:
@@ -38,51 +37,38 @@ async def run():
 
         print("[INFO] Typing origin: Bucharest and selecting from autocomplete")
         origin_input = page.locator('#from-input')
-        await origin_input.wait_for(timeout=10000)
+        await origin_input.wait_for(timeout=8000)
         await origin_input.click()
-        await page.keyboard.type("Bucharest", delay=100)
-        await page.wait_for_timeout(1000)
+        await page.keyboard.type("Bucharest", delay=50)
+        await page.wait_for_selector(".easy-autocomplete-container .eac-item", timeout=3000)
+        await page.locator(".easy-autocomplete-container .eac-item").first.click()
+        print("[SUCCESS] Selected: Bucharest")
 
-        for i in range(10):
-            items = await page.locator(".easy-autocomplete-container .eac-item").all()
-            if items:
-                await items[0].click()
-                print("[SUCCESS] Selected: Bucharest from autocomplete")
-                break
-            else:
-                print(f"[WAIT] Autocomplete not ready yet... retry {i + 1}")
-                await page.wait_for_timeout(500)
-        else:
-            raise Exception("Autocomplete list did not appear after multiple attempts")
-
-        print("[INFO] Selecting departure date range: May 10 - May 12")
+        print("[INFO] Selecting departure date range...")
         await page.locator('#deprange').click()
-        await page.wait_for_selector('.daterangepicker', timeout=5000)
+        await page.wait_for_selector('.daterangepicker', timeout=4000)
         await page.locator('td:has-text("10")').nth(1).click()
         await page.locator('td:has-text("12")').nth(1).click()
         await page.locator('.applyBtn:enabled').click()
-        await page.wait_for_timeout(1000)
+        await page.wait_for_selector('#submit', timeout=2000)
 
         print("[INFO] Selecting currency: USD")
         await page.select_option('#currency', 'USD')
 
-        print("[INFO] Expanding additional options")
+        print("[INFO] Expanding additional options...")
         await page.locator('button:has-text("Additional Options")').click()
-        await page.wait_for_timeout(1000)
+        await page.wait_for_selector('#limit', timeout=2000)
 
-        print("[INFO] Setting max number of results to 25")
+        print("[INFO] Setting max results and budget")
         await page.select_option('#limit', '25')
-
-        print("[INFO] Setting maximum budget to 27 USD")
         await page.fill('#budget', '27')
-        await page.wait_for_timeout(500)
 
         print("[INFO] Clicking the Search button")
         await page.locator('#submit').click()
-        await page.wait_for_timeout(5000)
+        await page.wait_for_timeout(2000)
 
         print("[INFO] Waiting for results to load...")
-        await page.wait_for_selector(".flights-list .flight", timeout=30000)
+        await page.wait_for_selector(".flights-list .flight", timeout=20000)
 
         print("[INFO] Extracting flight deals...")
         flight_cards = page.locator(".flights-list .flight")
