@@ -12,21 +12,15 @@ FILTERS = [
         "name": "بوخارست 10 - 12 مايو ≤ 25$ ",
         "origin": "Bucharest",
         "depart_day": "10",
+        "depart_month": "May",
+        "depart_year": "2025",
         "return_day": "12",
+        "return_month": "May",
+        "return_year": "2025",
         "currency": "USD",
         "max_results": "25",
         "max_budget": "25",
-    },
-    # {
-    #     "name": "صوفيا بين 15 و 17 مايو",
-    #     "origin": "Sofia",
-    #     "depart_day": "15",
-    #     "return_day": "17",
-    #     "currency": "USD",
-    #     "max_results": "25",
-    #     "max_budget": "25",
-    # }
-    # أضف المزيد هنا 👆
+    }
 ]
 
 # ========== Telegram Messaging ==========
@@ -58,8 +52,29 @@ async def scrape_flights(page, config):
 
     await page.locator('#deprange').click()
     await page.wait_for_selector('.daterangepicker', timeout=3000)
-    await page.locator(f'td:has-text("{config["depart_day"]}")').nth(1).click()
-    await page.locator(f'td:has-text("{config["return_day"]}")').nth(1).click()
+
+    # Helper function to navigate to desired month/year and return side
+    async def ensure_month_visible(month, year):
+        target_text = f"{month} {year}"
+        for _ in range(12):
+            left_month = await page.locator(".drp-calendar.left .month").inner_text()
+            right_month = await page.locator(".drp-calendar.right .month").inner_text()
+            if left_month.strip() == target_text:
+                return 'left'
+            if right_month.strip() == target_text:
+                return 'right'
+            await page.locator(".drp-calendar.right th.next").click()
+            await page.wait_for_timeout(300)
+        raise Exception(f"Month {target_text} not found in calendars")
+
+    # Navigate and select departure date
+    depart_side = await ensure_month_visible(config['depart_month'], config['depart_year'])
+    await page.locator(f".drp-calendar.{depart_side} td:has-text('{config['depart_day']}')").click()
+
+    # Navigate and select return date
+    return_side = await ensure_month_visible(config['return_month'], config['return_year'])
+    await page.locator(f".drp-calendar.{return_side} td:has-text('{config['return_day']}')").click()
+
     await page.locator('.applyBtn:enabled').click()
 
     await page.select_option('#currency', config['currency'])
