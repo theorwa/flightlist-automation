@@ -10,25 +10,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout & Setup & Run (All-in-One 🔥)
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install
+
+      - name: Run scraper
+        run: python flightlist_github.py
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          echo "[1/4] ✅ Cloning repository..."
-          git clone ${{ github.repositoryUrl }} repo
-          cd repo
-
-          echo "[2/4] ⚙️ Setting up Python 3.11..."
-          sudo apt update
-          sudo apt install -y python3.11 python3.11-venv python3.11-dev
-          python3.11 -m venv venv
-          source venv/bin/activate
-          python -m pip install --upgrade pip
-
-          echo "[3/4] 📦 Installing deps with cache..."
-          pip install playwright httpx
-          python -m playwright install --with-deps
-
-          echo "[4/4] 🛫 Running scraper..."
-          python flightlist_github.py
