@@ -1,13 +1,23 @@
-# flightlist_poc.py
-# Fast and optimized version - Scrapes FlightList.io and sends to Telegram
+# flightlist_scraper.py
+# Configurable and optimized FlightList.io scraper with Telegram alerts
 
 import asyncio
 import os
 import httpx
 from playwright.async_api import async_playwright
 
-# Send message to Telegram
-async def send_telegram_message(message):
+# ========== Configuration (EDIT THESE) ==========
+CONFIG = {
+    "origin": "Bucharest",
+    "depart_day": "10",
+    "return_day": "12",
+    "currency": "USD",
+    "max_results": "25",
+    "max_budget": "27",
+}
+
+# ========== Telegram Messaging ==========
+async def send_telegram_message(message: str):
     bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
     if not bot_token or not chat_id:
@@ -23,7 +33,7 @@ async def send_telegram_message(message):
     async with httpx.AsyncClient() as client:
         await client.post(url, json=payload)
 
-# Main function
+# ========== Scraper ==========
 async def run():
     print("[INFO] Launching browser...")
     async with async_playwright() as p:
@@ -35,37 +45,28 @@ async def run():
         print("[INFO] Opening FlightList.io...")
         await page.goto("https://www.flightlist.io", wait_until="networkidle")
 
-        print("[INFO] Typing origin: Bucharest and selecting from autocomplete")
-        origin_input = page.locator('#from-input')
-        await origin_input.wait_for(timeout=8000)
-        await origin_input.click()
-        await page.keyboard.type("Bucharest", delay=50)
+        print(f"[INFO] Typing origin: {CONFIG['origin']} and selecting from autocomplete")
+        await page.locator('#from-input').click()
+        await page.keyboard.type(CONFIG['origin'], delay=50)
         await page.wait_for_selector(".easy-autocomplete-container .eac-item", timeout=3000)
         await page.locator(".easy-autocomplete-container .eac-item").first.click()
-        print("[SUCCESS] Selected: Bucharest")
 
         print("[INFO] Selecting departure date range...")
         await page.locator('#deprange').click()
-        await page.wait_for_selector('.daterangepicker', timeout=4000)
-        await page.locator('td:has-text("10")').nth(1).click()
-        await page.locator('td:has-text("12")').nth(1).click()
+        await page.wait_for_selector('.daterangepicker', timeout=3000)
+        await page.locator(f'td:has-text("{CONFIG["depart_day"]}")').nth(1).click()
+        await page.locator(f'td:has-text("{CONFIG["return_day"]}")').nth(1).click()
         await page.locator('.applyBtn:enabled').click()
-        await page.wait_for_selector('#submit', timeout=2000)
 
-        print("[INFO] Selecting currency: USD")
-        await page.select_option('#currency', 'USD')
-
-        print("[INFO] Expanding additional options...")
+        print("[INFO] Setting currency, filters, and budget...")
+        await page.select_option('#currency', CONFIG['currency'])
         await page.locator('button:has-text("Additional Options")').click()
         await page.wait_for_selector('#limit', timeout=2000)
-
-        print("[INFO] Setting max results and budget")
-        await page.select_option('#limit', '25')
-        await page.fill('#budget', '27')
+        await page.select_option('#limit', CONFIG['max_results'])
+        await page.fill('#budget', CONFIG['max_budget'])
 
         print("[INFO] Clicking the Search button")
         await page.locator('#submit').click()
-        await page.wait_for_timeout(2000)
 
         print("[INFO] Waiting for results to load...")
         await page.wait_for_selector(".flights-list .flight", timeout=20000)
@@ -81,7 +82,7 @@ async def run():
             date = await flight.locator("div.col-md-3 small.text-muted").inner_text()
             route = await flight.locator(".col-md-5 small.text-muted").inner_text()
             times = await flight.locator(".col-md-3 span.reduced").inner_text()
-            results.append(f"<b>{date}</b>\n🕒 {times.strip()}\n✈️ {route.strip()}\n💰 Price: <b>${price}</b>\n---")
+            results.append(f"<b>{date}</b>\n\U0001F552 {times.strip()}\n\u2708\ufe0f {route.strip()}\n\U0001F4B0 Price: <b>${price}</b>\n---")
 
         if results:
             content = "\n\n".join(results)
