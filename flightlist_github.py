@@ -97,7 +97,7 @@ async def scrape_flights(page, config):
 async def run():
     print("[INFO] Launching browser...")
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(headless=True, args=["--disable-dev-shm-usage"])
         context = await browser.new_context()
         page = await context.new_page()
         await page.set_viewport_size({"width": 1920, "height": 1080})
