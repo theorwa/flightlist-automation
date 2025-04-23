@@ -3,6 +3,7 @@
 
 import asyncio
 import json
+import os
 import httpx
 from playwright.async_api import async_playwright
 
