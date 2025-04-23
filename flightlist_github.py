@@ -69,11 +69,11 @@ async def scrape_flights(page, config):
 
     # Navigate and select departure date
     depart_side = await ensure_month_visible(config['depart_month'], config['depart_year'])
-    await page.locator(f".drp-calendar.{depart_side} td:has-text('{config['depart_day']}')").click()
+    await page.locator(f".drp-calendar.{depart_side} td.available:not(.off):has-text('{config['depart_day']}')").first.click()
 
     # Navigate and select return date
     return_side = await ensure_month_visible(config['return_month'], config['return_year'])
-    await page.locator(f".drp-calendar.{return_side} td:has-text('{config['return_day']}')").click()
+    await page.locator(f".drp-calendar.{return_side} td.available:not(.off):has-text('{config['return_day']}')").first.click()
 
     await page.locator('.applyBtn:enabled').click()
 
