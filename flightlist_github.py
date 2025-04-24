@@ -52,6 +52,7 @@ def load_filters_from_csv():
                     "currency": row["currency"],
                     "max_results": row["max_results"],
                     "max_budget": row["max_budget"],
+                    "max_days": int(row.get("max_days", 0)) if row.get("max_days") else None
                 })
             except Exception as e:
                 print(f"[ERROR] Failed to parse row: {row}\nReason: {e}")
@@ -194,19 +195,25 @@ async def scrape_flights(page, config):
             try:
                 date_objects = [datetime.strptime(clean_date_string(d.strip()), "%a %b %d %Y") for d in dates]
                 days = (max(date_objects) - min(date_objects)).days + 1
+                if config['trip_type'] == "Return" and config.get("max_days") and days > config["max_days"]:
+                    print(f"[SKIPPED] Trip duration {days} exceeds max_days={config['max_days']}")
+                    continue
                 d = f" | {days} أيام"
+                sort_date = min(date_objects)
             except:
                 d = ""
+                sort_date = datetime.max
 
             trip_icon = "➡️" if config["trip_type"] == "One Way" else "🔁"
             summary_title = f"{trip_icon}{d} | ${price}"
 
-            results.append(f"<b>{summary_title}</b>\n\n{route_summary}\n---")
+            results.append({"text": f"<b>{summary_title}</b>\n\n{route_summary}\n---", "sort_date": sort_date})
 
     if results:
+        sorted_results = sorted(results, key=lambda r: r["sort_date"])
         header = f"🔎 <b>{config['name']}</b>\n\n"
-        await send_telegram_message(header + "\n\n".join(results))
-        print(f"[SUCCESS] Sent {len(results)} results to Telegram.")
+        await send_telegram_message(header + "\n\n".join([r["text"] for r in sorted_results]))
+        print(f"[SUCCESS] Sent {len(sorted_results)} results to Telegram.")
     else:
         print("[INFO] No results found for this filter after exclusion.")
 
