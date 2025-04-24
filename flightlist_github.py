@@ -61,6 +61,7 @@ EXCLUDED_COUNTRIES = [
     "(PFO)", # Paphos
     "(SKG)", # Thessaloniki
     "(MLA)", # Malta
+    "(ATH)", # Athens
 ]
 
 # ========== Telegram Messaging ==========
