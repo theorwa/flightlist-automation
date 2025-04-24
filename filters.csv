@@ -1,0 +1,10 @@
+﻿enabled,name,trip_type,origin,destination,depart_from,depart_to,return_from,return_to,currency,max_results,max_budget
+1,بوخارست 10 - 12 مايو,One Way,Bucharest,,10/5/2025,12/5/2025,,,USD,50,30
+1,تل أبيب 29 أبريل - 5 مايو,Return,Tel Aviv,,29-4-2024,2/5/2025,3/5/2025,5/5/2025,USD,200,60
+1,تل أبيب 21 - 26 مايو,Return,Tel Aviv,,21-5-2025,23-5-2025,24-5-2025,26-5-2025,USD,200,60
+1,تل أبيب 28 مايو - 2 يونيو,Return,Tel Aviv,,28-5-2025,30-5-2025,31-5-2025,2/6/2025,USD,200,60
+1,تل أبيب 7 - 15 يونيو,Return,Tel Aviv,,7/6/2025,14-6-2025,8/6/2025,15-6-2025,USD,200,60
+1,تل أبيب رحلات رخيصة 1,Return,Tel Aviv,Central Europe,24-4-2025,30-6-2025,1/5/2025,30-6-2025,USD,200,60
+1,تل أبيب رحلات رخيصة 2,Return,Tel Aviv,Eastern Europe,24-4-2025,30-6-2025,1/5/2025,30-6-2025,USD,200,60
+1,تل أبيب رحلات رخيصة 3,Return,Tel Aviv,Northern Europe,24-4-2025,30-6-2025,1/5/2025,30-6-2025,USD,200,60
+1,تل أبيب رحلات رخيصة 4,Return,Tel Aviv,Europe Schengen Zone,24-4-2025,30-6-2025,1/5/2025,30-6-2025,USD,200,60
