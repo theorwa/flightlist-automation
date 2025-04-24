@@ -3,6 +3,7 @@ import os
 import httpx
 import csv
 from datetime import datetime
+import re
 from playwright.async_api import async_playwright
 
 # ========== Load Filters from CSV ==========
@@ -79,6 +80,10 @@ async def send_telegram_message(message: str):
     async with httpx.AsyncClient() as client:
         await client.post(url, json=payload)
 
+# ========== Utility Function ==========
+def clean_date_string(date_str):
+    return re.sub(r'(\d+)(st|nd|rd|th)', r'\1', date_str)
+
 # ========== Scraping Function ==========
 async def scrape_flights(page, config):
     print(f"\n[INFO] Running filter: {config['name']}")
@@ -97,7 +102,6 @@ async def scrape_flights(page, config):
         await container.first.wait_for(state="visible", timeout=3000)
         await container.first.click()
 
-    # Select trip type (One Way or Return)
     trip_type = config.get("trip_type", "One Way")
     await page.select_option("#type", trip_type)
 
@@ -127,7 +131,6 @@ async def scrape_flights(page, config):
 
         await drp.locator('.applyBtn:enabled').click()
 
-    # Pick departure range
     await pick_date_range(
         "deprange",
         config['depart_from'],
@@ -187,10 +190,20 @@ async def scrape_flights(page, config):
                 break
             route_summary += f"<b>{date.strip()}</b>\n🕒 {time.strip()}\n✈️ {route.strip()}\n\n"
         else:
-            results.append(f"{route_summary}💰 Price: <b>${price}</b>\n---")
+            try:
+                date_objects = [datetime.strptime(clean_date_string(d.strip()), "%a %b %d %Y") for d in dates]
+                days = (max(date_objects) - min(date_objects)).days + 1
+                d = f" | {days} أيام"
+            except:
+                d = ""
+
+            trip_icon = "➡️" if config["trip_type"] == "One Way" else "🔁"
+            summary_title = f"{trip_icon}{d} | ${price}"
+
+            results.append(f"<b>{summary_title}</b>\n\n{route_summary}\n---")
 
     if results:
-        header = f"🌭 <b>{config['name']}</b>\n\n"
+        header = f"🔎 <b>{config['name']}</b>\n\n"
         await send_telegram_message(header + "\n\n".join(results))
         print(f"[SUCCESS] Sent {len(results)} results to Telegram.")
     else:
