@@ -191,18 +191,22 @@ async def scrape_flights(page, config):
     for i in range(count):
         flight = flight_cards.nth(i)
         price = await flight.locator(".price").inner_text()
-        date = await flight.locator("div.col-md-3 small.text-muted").nth(0).inner_text()
-        route = await flight.locator(".col-md-5 small.text-muted").nth(0).inner_text()
-        times = await flight.locator(".col-md-3 span.reduced").nth(0).inner_text()
 
-        skip = any(bad_country.lower() in route.lower() for bad_country in EXCLUDED_COUNTRIES)
-        if skip:
-            print(f"[SKIPPED] Skipped result due to excluded country in route: {route.strip()}")
-            continue
+        # اجمع كل التواريخ والمسارات والأوقات بدل من .nth(0)
+        dates = await flight.locator("div.col-md-3 small.text-muted").all_inner_texts()
+        routes = await flight.locator(".col-md-5 small.text-muted").all_inner_texts()
+        times = await flight.locator(".col-md-3 span.reduced").all_inner_texts()
 
-        results.append(
-            f"<b>{date}</b>\n🕒 {times.strip()}\n✈️ {route.strip()}\n💰 Price: <b>${price}</b>\n---"
-        )
+        route_summary = ""
+        for date, time, route in zip(dates, times, routes):
+            skip = any(bad_country.lower() in route.lower() for bad_country in EXCLUDED_COUNTRIES)
+            if skip:
+                print(f"[SKIPPED] Skipped segment due to excluded country in route: {route.strip()}")
+                break  # تجاهل النتيجة بالكامل
+            route_summary += f"<b>{date.strip()}</b>\n🕒 {time.strip()}\n✈️ {route.strip()}\n\n"
+        else:
+            # فقط إذا لم يتم التخطي لأي جزء
+            results.append(f"{route_summary}💰 Price: <b>${price}</b>\n---")
 
     if results:
         header = f"🧭 <b>{config['name']}</b>\n\n"
