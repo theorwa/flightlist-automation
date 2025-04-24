@@ -35,6 +35,7 @@ def load_filters_from_csv():
                     "name": row["name"],
                     "trip_type": row["trip_type"],
                     "origin": row["origin"],
+                    "destination": row["destination"],
                     "depart_from": str(dep_from_date.day),
                     "depart_to": str(dep_to_date.day),
                     "depart_month_from": dep_from_date.strftime("%b"),
@@ -83,10 +84,18 @@ async def scrape_flights(page, config):
     print(f"\n[INFO] Running filter: {config['name']}")
     await page.goto("https://www.flightlist.io", wait_until="networkidle")
 
-    await page.locator('#from-input').click()
-    await page.keyboard.type(config['origin'], delay=50)
-    await page.wait_for_selector(".easy-autocomplete-container .eac-item", timeout=3000)
-    await page.locator(".easy-autocomplete-container .eac-item").first.click()
+    if config.get("origin"):
+        await page.locator('#from-input').click()
+        await page.keyboard.type(config['origin'], delay=50)
+        await page.wait_for_selector(".easy-autocomplete-container .eac-item", timeout=3000)
+        await page.locator(".easy-autocomplete-container .eac-item").first.click()
+
+    if config.get("destination"):
+        await page.locator('#to-input').click()
+        await page.keyboard.type(config['destination'], delay=50)
+        container = page.locator('#eac-container-to-input .eac-item')
+        await container.first.wait_for(state="visible", timeout=3000)
+        await container.first.click()
 
     # Select trip type (One Way or Return)
     trip_type = config.get("trip_type", "One Way")
