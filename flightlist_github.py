@@ -4,103 +4,35 @@
 import asyncio
 import os
 import httpx
+import csv
 from playwright.async_api import async_playwright
 
-# ========== Filters Configuration ==========
-FILTERS = [
-    {
-        "name": "بوخارست 10 - 12 مايو",
-        "trip_type": "One Way",
-        "origin": "Bucharest",
-        "depart_from": "10",
-        "depart_to": "12",
-        "depart_month": "May",
-        "depart_year": "2025",
-        "currency": "USD",
-        "max_results": "50",
-        "max_budget": "30",
-    },
-    {
-        "name": "تل أبيب 29 أبريل - 5 مايو",
-        "trip_type": "Return",
-        "origin": "Tel Aviv",
-        "depart_from": "29",
-        "depart_to": "30",
-        "depart_month": "Apr",
-        "depart_year": "2025",
-        "return_from": "3",
-        "return_to": "5",
-        "return_month": "May",
-        "return_year": "2025",
-        "currency": "USD",
-        "max_results": "200",
-        "max_budget": "100",
-    },
-    {
-        "name": "تل أبيب 21 - 26 مايو",
-        "trip_type": "Return",
-        "origin": "Tel Aviv",
-        "depart_from": "21",
-        "depart_to": "23",
-        "depart_month": "May",
-        "depart_year": "2025",
-        "return_from": "24",
-        "return_to": "26",
-        "return_month": "May",
-        "return_year": "2025",
-        "currency": "USD",
-        "max_results": "200",
-        "max_budget": "100",
-    },
-    {
-        "name": "تل أبيب 28 - 31 مايو",
-        "trip_type": "Return",
-        "origin": "Tel Aviv",
-        "depart_from": "28",
-        "depart_to": "30",
-        "depart_month": "May",
-        "depart_year": "2025",
-        "return_from": "31",
-        "return_to": "31",
-        "return_month": "May",
-        "return_year": "2025",
-        "currency": "USD",
-        "max_results": "200",
-        "max_budget": "100",
-    },
-    {
-        "name": "تل أبيب 28 مايو - 2 يونيو",
-        "trip_type": "Return",
-        "origin": "Tel Aviv",
-        "depart_from": "28",
-        "depart_to": "30",
-        "depart_month": "May",
-        "depart_year": "2025",
-        "return_from": "1",
-        "return_to": "2",
-        "return_month": "Jun",
-        "return_year": "2025",
-        "currency": "USD",
-        "max_results": "200",
-        "max_budget": "100",
-    },
-    {
-        "name": "تل أبيب 7 - 15 يونيو",
-        "trip_type": "Return",
-        "origin": "Tel Aviv",
-        "depart_from": "7",
-        "depart_to": "15",
-        "depart_month": "Jun",
-        "depart_year": "2025",
-        "return_from": "7",
-        "return_to": "15",
-        "return_month": "Jun",
-        "return_year": "2025",
-        "currency": "USD",
-        "max_results": "200",
-        "max_budget": "100",
-    },
-]
+# ========== Load Filters from CSV ==========
+FILTERS = []
+CSV_FILE = "filters.csv"
+
+def load_filters_from_csv():
+    with open(CSV_FILE, newline='', encoding='utf-8-sig') as f:  # <== هنا التغيير
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row.get("enabled", "1").strip() != "1":
+                continue
+            FILTERS.append({
+                "name": row["name"],
+                "trip_type": row["trip_type"],
+                "origin": row["origin"],
+                "depart_from": row["depart_from"],
+                "depart_to": row["depart_to"],
+                "depart_month": row["depart_month"],
+                "depart_year": row["depart_year"],
+                "return_from": row.get("return_from"),
+                "return_to": row.get("return_to"),
+                "return_month": row.get("return_month"),
+                "return_year": row.get("return_year"),
+                "currency": row["currency"],
+                "max_results": row["max_results"],
+                "max_budget": row["max_budget"],
+            })
 
 # ========== Excluded Countries ==========
 EXCLUDED_COUNTRIES = [
@@ -202,10 +134,9 @@ async def scrape_flights(page, config):
             skip = any(bad_country.lower() in route.lower() for bad_country in EXCLUDED_COUNTRIES)
             if skip:
                 print(f"[SKIPPED] Skipped segment due to excluded country in route: {route.strip()}")
-                break  # تجاهل النتيجة بالكامل
+                break
             route_summary += f"<b>{date.strip()}</b>\n🕒 {time.strip()}\n✈️ {route.strip()}\n\n"
         else:
-            # فقط إذا لم يتم التخطي لأي جزء
             results.append(f"{route_summary}💰 Price: <b>${price}</b>\n---")
 
     if results:
@@ -218,6 +149,7 @@ async def scrape_flights(page, config):
 # ========== Runner ==========
 async def run():
     print("[INFO] Launching browser...")
+    load_filters_from_csv()
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--disable-dev-shm-usage"])
         context = await browser.new_context()
