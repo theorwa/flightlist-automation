@@ -1,38 +1,58 @@
-# flightlist_scraper.py
-# Multi-filter configurable FlightList.io scraper with Telegram alerts
-
 import asyncio
 import os
 import httpx
 import csv
+from datetime import datetime
 from playwright.async_api import async_playwright
 
 # ========== Load Filters from CSV ==========
 FILTERS = []
 CSV_FILE = "filters.csv"
 
+def parse_flexible_date(date_str):
+    formats = ["%d-%m-%Y", "%d/%m/%Y"]
+    for fmt in formats:
+        try:
+            return datetime.strptime(date_str.strip(), fmt)
+        except ValueError:
+            continue
+    raise ValueError(f"Invalid date format: {date_str}")
+
 def load_filters_from_csv():
-    with open(CSV_FILE, newline='', encoding='utf-8-sig') as f:  # <== هنا التغيير
+    with open(CSV_FILE, newline='', encoding='utf-8-sig') as f:
         reader = csv.DictReader(f)
         for row in reader:
             if row.get("enabled", "1").strip() != "1":
                 continue
-            FILTERS.append({
-                "name": row["name"],
-                "trip_type": row["trip_type"],
-                "origin": row["origin"],
-                "depart_from": row["depart_from"],
-                "depart_to": row["depart_to"],
-                "depart_month": row["depart_month"],
-                "depart_year": row["depart_year"],
-                "return_from": row.get("return_from"),
-                "return_to": row.get("return_to"),
-                "return_month": row.get("return_month"),
-                "return_year": row.get("return_year"),
-                "currency": row["currency"],
-                "max_results": row["max_results"],
-                "max_budget": row["max_budget"],
-            })
+            try:
+                # Parse full date parts
+                dep_from_date = parse_flexible_date(row["depart_from"])
+                dep_to_date = parse_flexible_date(row["depart_to"])
+                ret_from_date = parse_flexible_date(row["return_from"]) if row.get("return_from") else None
+                ret_to_date = parse_flexible_date(row["return_to"]) if row.get("return_to") else None
+
+                FILTERS.append({
+                    "name": row["name"],
+                    "trip_type": row["trip_type"],
+                    "origin": row["origin"],
+                    "depart_from": str(dep_from_date.day),
+                    "depart_to": str(dep_to_date.day),
+                    "depart_month_from": dep_from_date.strftime("%b"),
+                    "depart_year_from": str(dep_from_date.year),
+                    "depart_month_to": dep_to_date.strftime("%b"),
+                    "depart_year_to": str(dep_to_date.year),
+                    "return_from": str(ret_from_date.day) if ret_from_date else "",
+                    "return_to": str(ret_to_date.day) if ret_to_date else "",
+                    "return_month_from": ret_from_date.strftime("%b") if ret_from_date else "",
+                    "return_year_from": str(ret_from_date.year) if ret_from_date else "",
+                    "return_month_to": ret_to_date.strftime("%b") if ret_to_date else "",
+                    "return_year_to": str(ret_to_date.year) if ret_to_date else "",
+                    "currency": row["currency"],
+                    "max_results": row["max_results"],
+                    "max_budget": row["max_budget"],
+                })
+            except Exception as e:
+                print(f"[ERROR] Failed to parse row: {row}\nReason: {e}")
 
 # ========== Excluded Countries ==========
 EXCLUDED_COUNTRIES = [
@@ -85,20 +105,42 @@ async def scrape_flights(page, config):
             await page.wait_for_timeout(300)
         raise Exception(f"Month {target_text} not found in calendars")
 
-    async def pick_date_range(button_id, from_day, to_day, month, year, title_keyword=None):
+    async def pick_date_range(button_id, from_day, to_day, month_from, year_from, month_to, year_to, title_keyword=None):
         await page.locator(f'#{button_id}').click()
         drp = page.locator(f'.daterangepicker:has-text("{title_keyword}")') if title_keyword else page.locator('.daterangepicker')
         await drp.wait_for(timeout=3000)
-        side = await ensure_month_visible(month, year, drp)
-        await drp.locator(f".drp-calendar.{side} td.available:not(.off):has-text('{from_day}')").first.click()
-        await drp.locator(f".drp-calendar.{side} td.available:not(.off):has-text('{to_day}')").first.click()
+
+        side_from = await ensure_month_visible(month_from, year_from, drp)
+        await drp.locator(f".drp-calendar.{side_from} td.available:not(.off):has-text('{from_day}')").first.click()
+
+        side_to = await ensure_month_visible(month_to, year_to, drp)
+        await drp.locator(f".drp-calendar.{side_to} td.available:not(.off):has-text('{to_day}')").first.click()
+
         await drp.locator('.applyBtn:enabled').click()
 
     # Pick departure range
-    await pick_date_range("deprange", config['depart_from'], config['depart_to'], config['depart_month'], config['depart_year'], "Departure Date Range")
+    await pick_date_range(
+        "deprange",
+        config['depart_from'],
+        config['depart_to'],
+        config['depart_month_from'],
+        config['depart_year_from'],
+        config['depart_month_to'],
+        config['depart_year_to'],
+        "Departure Date Range"
+    )
 
     if trip_type == "Return":
-        await pick_date_range("retrange", config['return_from'], config['return_to'], config['return_month'], config['return_year'], "Return Date Range")
+        await pick_date_range(
+            "retrange",
+            config['return_from'],
+            config['return_to'],
+            config['return_month_from'],
+            config['return_year_from'],
+            config['return_month_to'],
+            config['return_year_to'],
+            "Return Date Range"
+        )
 
     await page.select_option('#currency', config['currency'])
     await page.locator('button:has-text("Additional Options")').click()
@@ -107,7 +149,7 @@ async def scrape_flights(page, config):
     await page.fill('#budget', config['max_budget'])
 
     await page.locator('#submit').click()
-    await page.wait_for_timeout(3000)
+    await page.wait_for_timeout(5000)
 
     has_flights = await page.locator(".flights-list .flight").count()
     no_results_text = await page.locator("text=No flights found").count()
@@ -124,7 +166,6 @@ async def scrape_flights(page, config):
         flight = flight_cards.nth(i)
         price = await flight.locator(".price").inner_text()
 
-        # اجمع كل التواريخ والمسارات والأوقات بدل من .nth(0)
         dates = await flight.locator("div.col-md-3 small.text-muted").all_inner_texts()
         routes = await flight.locator(".col-md-5 small.text-muted").all_inner_texts()
         times = await flight.locator(".col-md-3 span.reduced").all_inner_texts()
@@ -140,7 +181,7 @@ async def scrape_flights(page, config):
             results.append(f"{route_summary}💰 Price: <b>${price}</b>\n---")
 
     if results:
-        header = f"🧭 <b>{config['name']}</b>\n\n"
+        header = f"🌭 <b>{config['name']}</b>\n\n"
         await send_telegram_message(header + "\n\n".join(results))
         print(f"[SUCCESS] Sent {len(results)} results to Telegram.")
     else:
