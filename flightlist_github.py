@@ -175,7 +175,7 @@ async def scrape_flights(page, config):
     await page.fill('#budget', config['max_budget'])
 
     await page.locator('#submit').click()
-    await page.wait_for_timeout(2000)
+    await page.wait_for_timeout(3000)
 
     has_flights = await page.locator(".flights-list .flight").count()
     no_results_text = await page.locator("text=No flights found").count()
