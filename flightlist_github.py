@@ -9,18 +9,104 @@ from playwright.async_api import async_playwright
 # ========== Filters Configuration ==========
 FILTERS = [
     {
-        "name": "بوخارست 10 - 12 مايو ≤ 25$ ",
+        "name": "بوخارست 10 - 12 مايو",
+        "trip_type": "One Way",
         "origin": "Bucharest",
-        "depart_day": "10",
+        "depart_from": "10",
+        "depart_to": "12",
         "depart_month": "May",
         "depart_year": "2025",
-        "return_day": "12",
+        "currency": "USD",
+        "max_results": "50",
+        "max_budget": "30",
+    },
+    {
+        "name": "تل أبيب 29 أبريل - 5 مايو",
+        "trip_type": "Return",
+        "origin": "Tel Aviv",
+        "depart_from": "29",
+        "depart_to": "30",
+        "depart_month": "Apr",
+        "depart_year": "2025",
+        "return_from": "3",
+        "return_to": "5",
         "return_month": "May",
         "return_year": "2025",
         "currency": "USD",
-        "max_results": "25",
-        "max_budget": "25",
-    }
+        "max_results": "200",
+        "max_budget": "100",
+    },
+    {
+        "name": "تل أبيب 21 - 26 مايو",
+        "trip_type": "Return",
+        "origin": "Tel Aviv",
+        "depart_from": "21",
+        "depart_to": "23",
+        "depart_month": "May",
+        "depart_year": "2025",
+        "return_from": "24",
+        "return_to": "26",
+        "return_month": "May",
+        "return_year": "2025",
+        "currency": "USD",
+        "max_results": "200",
+        "max_budget": "100",
+    },
+    {
+        "name": "تل أبيب 28 - 31 مايو",
+        "trip_type": "Return",
+        "origin": "Tel Aviv",
+        "depart_from": "28",
+        "depart_to": "30",
+        "depart_month": "May",
+        "depart_year": "2025",
+        "return_from": "31",
+        "return_to": "31",
+        "return_month": "May",
+        "return_year": "2025",
+        "currency": "USD",
+        "max_results": "200",
+        "max_budget": "100",
+    },
+    {
+        "name": "تل أبيب 28 مايو - 2 يونيو",
+        "trip_type": "Return",
+        "origin": "Tel Aviv",
+        "depart_from": "28",
+        "depart_to": "30",
+        "depart_month": "May",
+        "depart_year": "2025",
+        "return_from": "1",
+        "return_to": "2",
+        "return_month": "Jun",
+        "return_year": "2025",
+        "currency": "USD",
+        "max_results": "200",
+        "max_budget": "100",
+    },
+    {
+        "name": "تل أبيب 7 - 15 يونيو",
+        "trip_type": "Return",
+        "origin": "Tel Aviv",
+        "depart_from": "7",
+        "depart_to": "15",
+        "depart_month": "Jun",
+        "depart_year": "2025",
+        "return_from": "7",
+        "return_to": "15",
+        "return_month": "Jun",
+        "return_year": "2025",
+        "currency": "USD",
+        "max_results": "200",
+        "max_budget": "100",
+    },
+]
+
+# ========== Excluded Countries ==========
+EXCLUDED_COUNTRIES = [
+    "(PFO)", # Paphos
+    "(SKG)", # Thessaloniki
+    "(MLA)", # Malta
 ]
 
 # ========== Telegram Messaging ==========
@@ -50,32 +136,37 @@ async def scrape_flights(page, config):
     await page.wait_for_selector(".easy-autocomplete-container .eac-item", timeout=3000)
     await page.locator(".easy-autocomplete-container .eac-item").first.click()
 
-    await page.locator('#deprange').click()
-    await page.wait_for_selector('.daterangepicker', timeout=3000)
+    # Select trip type (One Way or Return)
+    trip_type = config.get("trip_type", "One Way")
+    await page.select_option("#type", trip_type)
 
-    # Helper function to navigate to desired month/year and return side
-    async def ensure_month_visible(month, year):
+    async def ensure_month_visible(month, year, drp):
         target_text = f"{month} {year}"
         for _ in range(12):
-            left_month = await page.locator(".drp-calendar.left .month").inner_text()
-            right_month = await page.locator(".drp-calendar.right .month").inner_text()
+            left_month = await drp.locator(".drp-calendar.left .month").inner_text()
+            right_month = await drp.locator(".drp-calendar.right .month").inner_text()
             if left_month.strip() == target_text:
                 return 'left'
             if right_month.strip() == target_text:
                 return 'right'
-            await page.locator(".drp-calendar.right th.next").click()
+            await drp.locator(".drp-calendar.right th.next").click()
             await page.wait_for_timeout(300)
         raise Exception(f"Month {target_text} not found in calendars")
 
-    # Navigate and select departure date
-    depart_side = await ensure_month_visible(config['depart_month'], config['depart_year'])
-    await page.locator(f".drp-calendar.{depart_side} td.available:not(.off):has-text('{config['depart_day']}')").first.click()
+    async def pick_date_range(button_id, from_day, to_day, month, year, title_keyword=None):
+        await page.locator(f'#{button_id}').click()
+        drp = page.locator(f'.daterangepicker:has-text("{title_keyword}")') if title_keyword else page.locator('.daterangepicker')
+        await drp.wait_for(timeout=3000)
+        side = await ensure_month_visible(month, year, drp)
+        await drp.locator(f".drp-calendar.{side} td.available:not(.off):has-text('{from_day}')").first.click()
+        await drp.locator(f".drp-calendar.{side} td.available:not(.off):has-text('{to_day}')").first.click()
+        await drp.locator('.applyBtn:enabled').click()
 
-    # Navigate and select return date
-    return_side = await ensure_month_visible(config['return_month'], config['return_year'])
-    await page.locator(f".drp-calendar.{return_side} td.available:not(.off):has-text('{config['return_day']}')").first.click()
+    # Pick departure range
+    await pick_date_range("deprange", config['depart_from'], config['depart_to'], config['depart_month'], config['depart_year'], "Departure Date Range")
 
-    await page.locator('.applyBtn:enabled').click()
+    if trip_type == "Return":
+        await pick_date_range("retrange", config['return_from'], config['return_to'], config['return_month'], config['return_year'], "Return Date Range")
 
     await page.select_option('#currency', config['currency'])
     await page.locator('button:has-text("Additional Options")').click()
@@ -86,7 +177,13 @@ async def scrape_flights(page, config):
     await page.locator('#submit').click()
     await page.wait_for_timeout(2000)
 
-    await page.wait_for_selector(".flights-list .flight", timeout=20000)
+    has_flights = await page.locator(".flights-list .flight").count()
+    no_results_text = await page.locator("text=No flights found").count()
+
+    if not has_flights and no_results_text:
+        print("[INFO] No results found for this filter.")
+        return
+
     flight_cards = page.locator(".flights-list .flight")
     count = await flight_cards.count()
     results = []
@@ -94,9 +191,15 @@ async def scrape_flights(page, config):
     for i in range(count):
         flight = flight_cards.nth(i)
         price = await flight.locator(".price").inner_text()
-        date = await flight.locator("div.col-md-3 small.text-muted").inner_text()
-        route = await flight.locator(".col-md-5 small.text-muted").inner_text()
-        times = await flight.locator(".col-md-3 span.reduced").inner_text()
+        date = await flight.locator("div.col-md-3 small.text-muted").nth(0).inner_text()
+        route = await flight.locator(".col-md-5 small.text-muted").nth(0).inner_text()
+        times = await flight.locator(".col-md-3 span.reduced").nth(0).inner_text()
+
+        skip = any(bad_country.lower() in route.lower() for bad_country in EXCLUDED_COUNTRIES)
+        if skip:
+            print(f"[SKIPPED] Skipped result due to excluded country in route: {route.strip()}")
+            continue
+
         results.append(
             f"<b>{date}</b>\n🕒 {times.strip()}\n✈️ {route.strip()}\n💰 Price: <b>${price}</b>\n---"
         )
@@ -106,7 +209,7 @@ async def scrape_flights(page, config):
         await send_telegram_message(header + "\n\n".join(results))
         print(f"[SUCCESS] Sent {len(results)} results to Telegram.")
     else:
-        print("[INFO] No results found for this filter.")
+        print("[INFO] No results found for this filter after exclusion.")
 
 # ========== Runner ==========
 async def run():
